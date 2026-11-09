@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Machine Rounds</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a patient monitor housing. Room board on the left, the active room as the main screen, code log as a strip. */
+:root{
+  --bg:#0e191d;          /* monitor housing */
+  --panel:#142328;       /* screen panel */
+  --panel2:#1a2d33;
+  --line:#28434b;
+  --ink:#e4eee9;
+  --muted:#93aaa4;
+  --co2:#f2c94c;         /* capnography yellow */
+  --o2:#46b97f;          /* oxygen green: solved */
+  --alarm:#ff6f5e;       /* alarm red: wrong */
+  --air:#e9e2c8;
+  --display:"Saira Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Source Sans 3","Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:17px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;line-height:1.1;text-wrap:balance;margin:0}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--co2);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto}
+.label{font-family:var(--display);text-transform:uppercase;letter-spacing:.12em;font-size:13px;color:var(--muted);font-weight:600}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* Sign in */
+#signin{display:grid;gap:28px;max-width:760px;margin:4vh auto 0}
+.brand{display:flex;flex-direction:column;gap:6px}
+.brand h1{font-size:clamp(44px,9vw,84px);color:var(--ink)}
+.brand h1 span{color:var(--co2)}
+.hero-wave{width:100%;height:auto;display:block;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.story{display:grid;gap:12px;max-width:65ch}
+.story p{margin:0}
+.signin-form{display:flex;flex-wrap:wrap;gap:12px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px}
+.signin-form .field{display:grid;gap:6px;flex:1 1 220px;min-width:0}
+input[type=text]{font-family:var(--mono);font-size:22px;letter-spacing:.12em;text-transform:uppercase;background:var(--bg);color:var(--co2);border:1px solid var(--line);border-radius:4px;padding:10px 12px;width:100%}
+.btn{background:var(--co2);color:#1a1608;border:0;border-radius:4px;padding:12px 20px;font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.err{color:var(--alarm);margin:0;flex-basis:100%}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.rule{border-top:2px solid var(--line);padding-top:10px;display:grid;gap:4px}
+.rule b{font-family:var(--display);font-size:19px;letter-spacing:.02em}
+
+/* Game */
+#game{display:grid;gap:18px}
+.topbar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px}
+.topbar h1{font-size:34px}
+.topbar h1 span{color:var(--co2)}
+.readouts{display:flex;gap:22px;flex-wrap:wrap}
+.readout{display:grid;gap:0}
+.readout .v{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--co2);font-variant-numeric:tabular-nums}
+.readout .v.g{color:var(--o2)}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.layout{grid-template-columns:minmax(0,1fr)}}
+.board{display:grid;gap:6px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:820px){.board{position:static;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+.room{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:9px 10px;cursor:pointer}
+.room:disabled{cursor:not-allowed;opacity:.45}
+.room.active{border-color:var(--co2);background:var(--panel2)}
+.room .num{font-family:var(--display);font-weight:700;font-size:15px;color:var(--muted);min-width:44px}
+.room .nm{font-size:15px;line-height:1.2;min-width:0}
+.pips{display:flex;gap:3px}
+.pip{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.pip.on{background:var(--o2)}
+
+.screen{display:grid;gap:18px;min-width:0}
+.room-head{display:grid;gap:6px}
+.room-head h2{font-size:clamp(30px,5vw,44px)}
+.room-head .scene{max-width:70ch;color:var(--muted);margin:0}
+details.notes{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+details.notes summary{cursor:pointer;padding:12px 16px;font-family:var(--display);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:15px;color:var(--co2)}
+.notes-body{padding:0 18px 16px;display:grid;gap:10px;max-width:78ch}
+.notes-body ul{margin:0;padding-left:20px;display:grid;gap:8px}
+.notes-body p{margin:0}
+.notes-body b{color:var(--air)}
+
+.decision{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:grid;gap:14px;min-width:0}
+.decision.done{border-color:color-mix(in srgb,var(--o2) 55%,var(--line))}
+.dhead{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.stem{margin:0;max-width:72ch}
+.wave{background:var(--bg);border:1px solid var(--line);border-radius:4px;overflow-x:auto}
+.wave svg{display:block;width:100%;min-width:420px;height:auto}
+.opts{display:grid;gap:8px}
+.opt{display:grid;grid-template-columns:28px 1fr;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:11px 12px;cursor:pointer;line-height:1.4}
+.opt:hover:not(:disabled){border-color:var(--muted)}
+.opt:disabled{cursor:default}
+.opt .k{font-family:var(--mono);font-weight:700;color:var(--muted)}
+.opt.bad{border-color:var(--alarm);background:color-mix(in srgb,var(--alarm) 10%,var(--bg))}
+.opt.good{border-color:var(--o2);background:color-mix(in srgb,var(--o2) 12%,var(--bg))}
+.fb{border-left:3px solid var(--alarm);padding:4px 0 4px 12px;display:grid;gap:8px}
+.fb.ok{border-color:var(--o2)}
+.fb p{margin:0}
+.fb .t{font-family:var(--display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:15px}
+.fb .t.r{color:var(--alarm)} .fb .t.g{color:var(--o2)}
+.clue{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;background:var(--bg);border:1px dashed var(--co2);border-radius:4px;padding:12px 14px}
+.clue .big{font-family:var(--mono);font-size:34px;font-weight:700;color:var(--co2);line-height:1}
+.next{justify-self:start}
+.chal{display:inline-block;margin-left:8px;padding:1px 7px;border:1px solid var(--co2);border-radius:3px;color:var(--co2);letter-spacing:.1em}
+
+.log{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:10px}
+.cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px}
+.cell{border:1px solid var(--line);border-radius:3px;padding:4px 6px;display:grid;gap:0;text-align:center}
+.cell .s{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.cell .c{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--co2);min-height:27px}
+.cell.empty .c{color:var(--line)}
+.finale{background:var(--panel2);border:1px solid var(--co2);border-radius:6px;padding:20px;display:grid;gap:10px}
+.finale h2{font-size:34px;color:var(--co2)}
+.finale p{margin:0;max-width:68ch}
+.foot{color:var(--muted);font-size:14px;display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+@media (prefers-reduced-motion:no-preference){
+  .clue{animation:pop .35s ease-out}
+  @keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+}
+</style>
+
+<div class="wrap">
+  <section id="signin">
+    <div class="brand">
+      <span class="label">ANES 1123 · Anesthesia Machine and Monitoring Review</span>
+      <h1>Machine <span>Rounds</span></h1>
+    </div>
+    <svg class="hero-wave" viewBox="0 0 760 90" aria-hidden="true" id="heroWave"></svg>
+    <div class="story">
+      <p>It is 0630. First case starts at 0730. You are the anesthesia technologist assigned to the workroom and ORs 1 through 11, and every room has a problem waiting for you.</p>
+      <p>Work each room like a real call: read the field notes, assess the situation, and make the decision. Every correct decision releases a two digit <b>code</b> on the room monitor. Write each code in the matching numbered box on your paper key card.</p>
+    </div>
+    <div class="rules">
+      <div class="rule"><b>50 decisions</b><span>Eleven rooms of four decisions, then a six decision capstone. Rooms open in order as you clear them.</span></div>
+      <div class="rule"><b>Your card only</b><span>Codes and answer order are different for every student. Only your own key card turns your codes into your phrase.</span></div>
+      <div class="rule"><b>10 exam points</b><span>Decode all 50 boxes and turn in your phrase to your instructor for 10 points on your exam.</span></div>
+    </div>
+    <form class="signin-form" id="signinForm" autocomplete="off">
+      <div class="field">
+        <label class="label" for="codeInput">Student code from your key card</label>
+        <input type="text" id="codeInput" maxlength="8" placeholder="AT····" spellcheck="false">
+      </div>
+      <button class="btn" type="submit">Start shift</button>
+      <p class="err" id="signinErr" hidden></p>
+    </form>
+  </section>
+
+  <section id="game" hidden>
+    <div class="topbar">
+      <h1>Machine <span>Rounds</span></h1>
+      <div class="readouts">
+        <div class="readout"><span class="label">Student</span><span class="v mono" id="roCode">----</span></div>
+        <div class="readout"><span class="label">Codes</span><span class="v g" id="roCodes">0/50</span></div>
+        <div class="readout"><span class="label">First try</span><span class="v" id="roFirst">0</span></div>
+      </div>
+    </div>
+    <div class="layout">
+      <nav class="board" id="board" aria-label="Room board"></nav>
+      <main class="screen" id="screen"></main>
+    </div>
+    <div class="log">
+      <div class="dhead"><span class="label">Code log · copy each code into the matching box on your key card</span></div>
+      <div class="cells" id="cells"></div>
+    </div>
+    <div class="foot"><span>Progress saves in this browser for your code.</span><button class="btn ghost" id="switchBtn" type="button">Switch student code</button></div>
+  </section>
+</div>
+
+<script>
+const ROSTER = {"MRBKRG":{"clues":[25,15,87,49,66,50,33,17,72,39,26,63,51,77,69,59,81,22,97,92,73,35,34,14,36,83,67,19,40,48,93,56,29,53,94,30,38,95,88,31,57,82,28,20,96,23,86,58,80,76],"weight":96,"vt":570,"pplat":28,"peep":5,"ppeak":33,"paco2":45,"etco2":40},"MR34EG":{"clues":[66,31,29,92,61,27,87,67,23,77,22,58,37,96,32,80,41,42,82,97,68,74,91,18,63,24,88,11,46,64,44,49,86,38,53,33,75,59,15,12,25,89,39,90,60,72,13,93,73,57],"weight":81,"vt":490,"pplat":29,"peep":8,"ppeak":33,"paco2":39,"etco2":28},"MRGW9X":{"clues":[80,90,75,44,48,84,56,51,60,16,63,72,71,46,50,88,74,12,57,68,81,92,91,95,33,99,64,62,10,38,82,32,25,67,42,49,87,70,37,78,89,29,77,55,22,31,58,83,27,47],"weight":80,"vt":560,"pplat":30,"peep":5,"ppeak":36,"paco2":39,"etco2":35},"MR89MC":{"clues":[68,35,13,49,31,77,90,97,26,72,45,50,38,94,65,53,18,55,75,76,74,47,60,39,28,62,64,32,17,34,21,88,78,93,91,30,29,22,27,81,58,56,42,12,66,11,83,33,25,73],"weight":82,"vt":420,"pplat":21,"peep":5,"ppeak":29,"paco2":40,"etco2":30},"MRAQKG":{"clues":[65,93,90,11,36,74,30,87,33,80,97,27,89,62,83,76,98,86,46,26,29,91,88,75,82,16,67,17,78,95,21,71,13,92,63,84,28,72,57,48,32,64,52,61,18,24,66,51,99,73],"weight":61,"vt":490,"pplat":26,"peep":8,"ppeak":33,"paco2":45,"etco2":40},"MR7M4Z":{"clues":[37,32,44,53,31,95,74,83,89,56,84,47,85,78,27,34,94,99,46,51,76,43,39,11,21,65,52,64,18,79,93,40,58,55,88,72,61,63,41,86,68,23,36,69,67,75,59,13,10,28],"weight":67,"vt":530,"pplat":26,"peep":8,"ppeak":33,"paco2":44,"etco2":33},"MRM9XD":{"clues":[31,96,69,46,64,99,30,65,53,62,90,16,41,85,95,56,73,25,92,14,51,82,86,71,43,83,36,66,45,19,94,49,98,40,38,42,15,68,21,48,58,20,34,39,44,17,33,22,75,28],"weight":72,"vt":500,"pplat":28,"peep":5,"ppeak":32,"paco2":45,"etco2":41},"MR8U8Y":{"clues":[40,87,99,83,25,46,70,51,89,22,41,33,27,31,43,78,23,90,13,73,20,92,50,79,84,56,58,82,24,86,35,55,53,88,54,10,91,71,36,66,52,38,32,49,85,64,76,62,96,61],"weight":82,"vt":560,"pplat":28,"peep":8,"ppeak":33,"paco2":40,"etco2":29},"MRAQCN":{"clues":[89,22,85,92,80,19,96,42,61,76,87,33,46,54,50,71,15,95,25,55,78,99,18,68,45,58,23,51,73,94,72,26,57,56,38,70,82,32,66,37,86,81,62,36,64,59,48,84,47,75],"weight":94,"vt":600,"pplat":23,"peep":6,"ppeak":27,"paco2":38,"etco2":34},"MR6E6E":{"clues":[42,13,89,14,73,41,95,48,38,71,91,24,92,59,69,35,64,49,10,40,17,60,58,39,88,36,11,62,67,43,82,47,34,72,78,19,50,65,76,15,93,96,74,55,52,90,86,32,26,97],"weight":117,"vt":560,"pplat":20,"peep":8,"ppeak":26,"paco2":43,"etco2":32}};
+
+/* ---------- Waveform drawing ---------- */
+function rnd(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+function capno(kind){
+  const W=640,H=170,L=38,T=14,B=H-26,R=W-10,max=50;
+  const y=v=>B-(v/max)*(B-T);
+  const r=rnd(kind.length*97+7);
+  let pts=[],x=L;const breaths=kind==='peds'?7:4;const bw=(R-L)/breaths;
+  for(let i=0;i<breaths;i++){
+    const x0=L+i*bw;const base=kind==='elevated'?8:0;
+    const P=(f,v)=>pts.push([x0+f*bw,v]);
+    if(kind==='absent'){P(0,0);P(1,0);continue}
+    let pk=38+(r()-.5)*2;
+    if(kind==='leak'){pk=30-i*2+(r()*3)}
+    if(kind==='fluid'){pk=24+r()*12}
+    P(0,base);P(.12,base);
+    if(kind==='sharkfin'){
+      for(let k=0;k<=10;k++){const f=k/10;P(.12+f*.6,base+(pk+4-base)*(1-Math.exp(-3*f))/(1-Math.exp(-3)))}
+      P(.78,pk+4);P(.86,base);P(1,base);
+    }else if(kind==='curare'){
+      P(.2,pk-4);P(.3,pk-2);P(.42,pk-1);P(.47,pk-9);P(.52,pk);P(.66,pk+1);P(.72,base);P(1,base);
+    }else if(kind==='leak'){
+      P(.2,pk-3);P(.32,pk);P(.42,pk-5);P(.52,pk-12);P(.58,base+3);P(.64,base);P(1,base);
+    }else if(kind==='fluid'){
+      for(let k=0;k<=12;k++){const f=k/12;P(.12+f*.6,base+3*r()+(pk-base)*Math.sin(Math.PI*Math.min(1,f*1.1))*.9)}
+      P(.8,base+2*r());P(1,base+2*r());
+    }else if(kind==='peds'){
+      P(.25,pk-6);P(.5,pk);P(.62,base);P(1,base);
+    }else{
+      P(.2,pk-4);P(.3,pk-2);P(.66,pk+1);P(.72,base);P(1,base);
+    }
+  }
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+y(p[1]).toFixed(1)).join(' ');
+  let g='';for(const v of [0,10,20,30,40,50]){g+=`<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v===0?1.2:.6}" ${v?'stroke-dasharray="2 5"':''}/><text x="${L-6}" y="${y(v)+4}" fill="var(--muted)" font-size="11" font-family="JetBrains Mono,monospace" text-anchor="end">${v}</text>`}
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Capnogram"><rect width="${W}" height="${H}" fill="var(--bg)"/>${g}<text x="${L}" y="${H-7}" fill="var(--muted)" font-size="11" font-family="Saira Condensed,sans-serif" letter-spacing="1.5">CO2 · mmHg · real time</text><path d="${d}" fill="none" stroke="var(--co2)" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
+}
+function trend(kind){
+  const W=640,H=170,L=38,T=14,B=H-26,R=W-10,max=60;
+  const y=v=>B-(v/max)*(B-T);
+  const n=60;const r=rnd(kind.length*31+3);const vals=[];
+  for(let i=0;i<=n;i++){
+    let v=36+(r()-.5)*1.4;
+    if(kind==='tourniquet'){ if(i>=14&&i<20)v+= [0,9,12,8,4,1][i-14]; if(i>=40&&i<46)v+=[0,8,11,7,3,1][i-40]; }
+    if(kind==='vae'){ if(i>=24)v-= Math.max(0,16-(i-24)*.7) }
+    if(kind==='hypovolemia'){ v=38-i*.33+(r()-.5) }
+    if(kind==='mh'){ v=37+Math.max(0,(i-15))**1.35*.18+(r()-.5) }
+    vals.push(Math.max(0,v));
+  }
+  const d=vals.map((v,i)=>(i?'L':'M')+(L+(R-L)*i/n).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  let g='';for(const v of [0,20,40,60]){g+=`<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width=".6" stroke-dasharray="2 5"/><text x="${L-6}" y="${y(v)+4}" fill="var(--muted)" font-size="11" font-family="JetBrains Mono,monospace" text-anchor="end">${v}</text>`}
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ETCO2 trend"><rect width="${W}" height="${H}" fill="var(--bg)"/>${g}<text x="${L}" y="${H-7}" fill="var(--muted)" font-size="11" font-family="Saira Condensed,sans-serif" letter-spacing="1.5">ETCO2 TREND · mmHg · 30 minutes</text><path d="${d}" fill="none" stroke="var(--co2)" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
+}
+
+/* ---------- Content ---------- */
+const STATIONS=[
+/* ================= WORKROOM ================= */
+{num:'WORK',name:'Gas Analysis Bench',scene:'The anesthesia workroom. A call slip is waiting, the gas analysis bench is half assembled, and a vendor rep wants five minutes of your time.',
+notes:`<ul>
+<li><b>Monitoring standards.</b> The ASA Standards for Basic Anesthetic Monitoring are organized by physiologic function: oxygenation, ventilation, circulation and temperature. For every monitor in the room, know which function it serves and which numbered standard covers it.</li>
+<li><b>Where the gas is analyzed decides the weaknesses.</b> A diverting analyzer depends on everything between the airway and the bench: the line, its length, its connections and the water trap. A non diverting analyzer sits in the airway and lives with whatever the airway produces. When troubleshooting, first ask where the measurement is happening.</li>
+<li><b>Transit time matters.</b> Gas that travels farther arrives later and mixes along the way. Think about what that does to the timing and shape of each breath on the screen, especially with small, fast breaths.</li>
+<li><b>Four physical principles, four technologies.</b> Principles: absorption of light at specific wavelengths, scattering of light, magnetic attraction, and a chemical reaction that produces current. Technologies, in no particular order: electrochemical, paramagnetic, Raman, infrared. Be able to match each technology to its principle and to the gases it measures.</li>
+<li><b>Troubleshooting has an order.</b> The Anesthesia Technologist's Manual lays out a sequence for troubleshooting a capnography device. Know the sequence and be able to explain why the first step comes before the others.</li>
+</ul>`,
+d:[
+{stem:'The charge technologist hands you a call slip: "OR 4, capnography alarm, provider wants help." According to the Anesthesia Technologist\'s Manual, what is your FIRST step?',
+ o:[{t:'Gather sample lines, a water trap, airway adapters and anything else you may reasonably need, then go.',ok:1,why:'Correct. Being prepared is step one. Walking in empty handed means a second trip while the patient waits.'},
+    {t:'Call biomed and request a replacement machine before you assess anything.',why:'Swapping equipment is a backup plan, not a first step. You have not assessed the problem yet.'},
+    {t:'Walk in and start sorting out which alarms to prioritize.',why:'Prioritizing multiple faults matters, but it comes after you arrive with what you need.'},
+    {t:'Phone the room and ask them to power cycle the monitor.',why:'A reboot drops monitoring during a case and skips the first step entirely.'}]},
+{stem:'An older monitor in the workroom uses a sensor that clips directly onto the airway adapter at the elbow. Staff report that the reading drifts during long cases and the sensor window fogs. What best explains this?',
+ o:[{t:'It is a non diverting sensor sitting in warm, humid exhaled gas at the airway.',ok:1,why:'Correct. A sensor at the airway is exposed to the moisture in every exhaled breath, so condensation is its classic weakness.'},
+    {t:'The sidestream sample line is too long.',why:'Line length is a diverting analyzer problem. This sensor has no sample line.'},
+    {t:'The Raman laser is failing.',why:'Raman benches sit inside the monitor. A fogged window at the airway points elsewhere.'},
+    {t:'The galvanic O2 cell is depleted.',why:'The O2 cell measures oxygen and has nothing to do with the CO2 sensor window.'}]},
+{stem:'The vendor rep says her new bench "identifies each gas by the pattern of light the sample scatters back." Which technology is she describing?',
+ o:[{t:'Raman spectroscopy',ok:1,why:'Correct. Raman analysis reads scattered light to determine the makeup of the sample.'},
+    {t:'Infrared absorption',why:'Infrared measures how much light a gas absorbs, not how it scatters light.'},
+    {t:'Paramagnetic analysis',why:'Paramagnetic analyzers rely on the magnetic behavior of O2.'},
+    {t:'Electrochemical cell',why:'An electrochemical cell produces current from a chemical reaction. No light is involved.'}]},
+{challenge:1,stem:'Pediatric ENT room. To keep the monitor away from the surgical field, someone added an extension to the sidestream sample line, more than doubling its length. The infant is ventilated at a rate of 30. The capnogram now looks rounded with no clear plateau, ETCO2 reads lower than the ABG suggests, and the trace lags behind the ventilator. What is the most likely cause, and what is the fix?',
+ o:[{t:'The long line delays the sample and mixes it with fresh gas between small, fast breaths. Return to a standard length line and move the monitor closer.',ok:1,why:'Correct. Tubing length is a key consideration with diverting analyzers. Longer transit means delay and mixing, and small, fast breaths suffer most.'},
+    {t:'Moisture is fogging the sensor window at the airway. Replace the airway adapter.',why:'That describes a non diverting sensor. This is a sidestream setup with a lengthened line.'},
+    {t:'Cross contamination between patients. Replace the water trap.',why:'Cross contamination is an infection control concern. It does not explain delay and a blunted waveform after the line was lengthened.'},
+    {t:'This is the normal pediatric waveform. No action is needed.',why:'Pediatric waveforms can lose some plateau, but the low reading and lag began when the line changed. That points to the equipment.'}]}
+]},
+/* ================= OR 1 ================= */
+{num:'OR 1',name:'Airway Trouble',scene:'OR 1 is turning over fast. Four airway calls in a row, and the waveform is your best witness.',
+notes:`<ul>
+<li><b>Read the capnogram as a story of one breath.</b> Phase I is dead space gas leaving first. Phase II is the mix of dead space and alveolar gas. Phase III is alveolar gas. The inspiratory downstroke follows. Each phase has a normal shape, and each abnormal shape points to a different part of the system.</li>
+<li><b>The slope of Phase III</b> reflects how evenly alveoli empty. When some lung units empty slowly, CO2 keeps rising through exhalation. Ask what would make lung units empty unevenly, and whether the cause is fixed or new.</li>
+<li><b>Timing separates acute from chronic.</b> A finding present from the first breath tells a different story than one that appears in the middle of a case. Compare the history with when the change appeared.</li>
+<li><b>The tube moves with the patient.</b> Flexion, extension, rotation, lateral positioning and steep table angles all change the distance from the tube tip to the carina and to the cords. Work out which direction each maneuver moves the tip, and what you would see if it moved too far each way.</li>
+<li><b>A flat line has a short list.</b> Ask three questions: Is gas being sampled? Is gas moving in and out? Is CO2 reaching the lungs from the circulation?</li>
+</ul>`,
+d:[
+{stem:'A 34 year old with no lung disease had a normal waveform after induction. Twenty minutes later, after the surgeon starts, the waveform looks like this. What is the MOST likely cause?',wave:()=>capno('sharkfin'),
+ o:[{t:'Bronchospasm',ok:1,why:'Correct. A new shark fin in a patient with healthy lungs is an acute obstruction, and bronchospasm is the classic cause.'},
+    {t:'Structural COPD',why:'COPD causes this shape, but it is chronic. It would have been present from the first breath, and this patient has no lung disease.'},
+    {t:'Tube migration toward the vocal cords',why:'Migration toward the cords causes leak and lost volume, not an evenly sloped Phase III.'},
+    {t:'Pneumothorax',why:'A pneumothorax drops compliance and raises pressures. It does not produce this classic obstructive slope.'}]},
+{stem:'A 6\'4" patient is intubated on the stretcher, tube taped at 22 cm, then moved to the OR table and turned into a lateral position for hip surgery. The waveform becomes irregular, returned volumes fall, and the provider hears an air leak. What is MOST likely?',
+ o:[{t:'The tube migrated toward the vocal cords during the turn.',ok:1,why:'Correct. Lateral positioning tends to pull the tube outward, and a cuff sitting near the cords leaks.'},
+    {t:'The tube migrated toward the carina.',why:'Deeper migration causes mainstem intubation with high pressures, not a leak.'},
+    {t:'A tooth cut the cuff during intubation.',why:'A cut cuff would have leaked from the start, not after the position change.'},
+    {t:'A compliance mismatch developed between the two lungs.',why:'Lateral positioning changes ventilation and perfusion, but it does not create an audible leak.'}]},
+{stem:'After a video laryngoscope intubation, the provider confirms placement with ETCO2 on several bag breaths and bilateral breath sounds. She turns to chart. While you tape the tube at 21 cm, the waveform looks like this. What is the MOST likely cause?',wave:()=>capno('absent'),
+ o:[{t:'Apnea: the ventilator was never switched on after intubation.',ok:1,why:'Correct. Placement was already confirmed. A flat line right after hands leave the bag means nobody is breathing for the patient.'},
+    {t:'Esophageal intubation',why:'Placement was confirmed with ETCO2 over several breaths and with breath sounds. Check the ventilator first.'},
+    {t:'Dead space from a pulmonary embolism',why:'A PE lowers ETCO2. It does not flatten the waveform to zero.'},
+    {t:'Pulmonary shunt from aspiration',why:'Shunt affects oxygenation far more than CO2 and would not cause a flat line.'}]},
+{challenge:1,stem:'A 5\'2" patient is intubated with the tube taped at 23 cm. The table is then placed in steep Trendelenburg and the abdomen is insufflated. Over the next few minutes, peak pressure climbs from 22 to 36 cmH2O, SpO2 drifts from 99% to 91%, and breath sounds are clearly diminished on the left. A capnogram is still present with only a slight change in Phase III. What is MOST likely?',
+ o:[{t:'The tube migrated deeper into the right mainstem bronchus as the position changed.',ok:1,why:'Correct. Steep head down positioning and insufflation push the carina upward toward a tube that was already deep for a short patient. One lung ventilation explains the pressures, the desaturation and the one sided breath sounds.'},
+    {t:'The tube migrated toward the vocal cords.',why:'Outward migration causes a leak and falling pressures. These pressures are rising.'},
+    {t:'Bronchospasm',why:'Bronchospasm raises pressures, but it would produce a clear shark fin and bilateral wheezing, not one sided breath sounds that began with a position change.'},
+    {t:'A left sided pneumothorax from insufflation',why:'Always consider it, but the timing with a position change, a tube already deep for this patient, and a preserved waveform make mainstem migration more likely. Check tube depth first.'}]}
+]},
+/* ================= OR 2 ================= */
+{num:'OR 2',name:'Waveform Lab',scene:'The OR 2 resident keeps photographing the monitor. He wants you to tell him what each shape means and what to do about it.',
+notes:`<ul>
+<li><b>Mechanical breaths versus patient effort.</b> When the patient makes an effort of their own during a mechanical breath, the plateau can be interrupted. Consider what stage of neuromuscular blockade allows that to happen.</li>
+<li><b>Small gas movements from outside the lungs.</b> At slow rates, motion of the heart against the lungs can move tiny volumes of gas past the sampling site. Know where on the waveform that appears and how it differs from an equipment problem.</li>
+<li><b>Leaks change both shape and returned volume.</b> Some ventilator modes rely on the patient's own flow signal to start and end each breath. Think about what a leak does to that signal, and which mode would stop depending on it.</li>
+<li><b>Flow follows a pressure difference.</b> In a pressure targeted breath, the ventilator holds airway pressure at a set level. Flow is driven by the difference between that set pressure and the pressure inside the lungs. Work out how that difference changes as the lungs fill. Compare that with a volume targeted breath.</li>
+<li><b>Three sample line failures look different.</b> A line that delivers no gas, a line that adds room air, and a line partly blocked by liquid each change the waveform in their own way. Know the risk factors for liquid in the line.</li>
+</ul>`,
+d:[
+{stem:'A nondepolarizing relaxant was given at induction, and the provider is waiting for full relaxation before the surgeon starts. The resident shows you this waveform. What is happening?',wave:()=>capno('curare'),
+ o:[{t:'The patient is making spontaneous breathing efforts because the paralytic is not fully onboard (curare cleft).',ok:1,why:'Correct. The notch in the plateau is the diaphragm working on its own.'},
+    {t:'Cardiogenic oscillations',why:'Cardiogenic oscillations ripple along the downstroke at slow rates. This is a single notch in the plateau.'},
+    {t:'Esophageal intubation',why:'Esophageal placement gives small, fading waveforms that disappear within a few breaths.'},
+    {t:'Fluid in the sample line',why:'Fluid gives a damped and erratic trace, not a clean notch in each plateau.'}]},
+{stem:'Knee arthroscopy. Size 4 LMA, cuff at 30 cmH2O, pressure support ventilation. ETCO2 has been steady at 36 mmHg. Now the waveform looks like this and returned volumes are falling. What is the BEST first fix?',wave:()=>capno('leak'),
+ o:[{t:'Switch to pressure control ventilation.',ok:1,why:'Correct. Pressure control delivers a set pressure every breath and does not depend on a patient triggered cycle that the leak disrupts.'},
+    {t:'Switch to volume support.',why:'Volume support is still a patient triggered support mode and has the same trouble with the leak.'},
+    {t:'Remove the LMA and intubate.',why:'That may become necessary, but it is not the first fix for a correctable ventilation problem.'},
+    {t:'Switch to bag mode and ventilate by hand for the rest of the case.',why:'Hand ventilation buys time, but a mode change is the fix.'}]},
+{stem:'Five hours into a case with an HME and 1.5 L/min fresh gas flow, the provider calls about this waveform. It is not cardiogenic oscillation. What is the MOST likely cause?',wave:()=>capno('fluid'),
+ o:[{t:'Fluid trapped in the sample line',ok:1,why:'Correct. A long case, an HME and low flows let moisture collect in the line and damp the trace. Replace the line and check the water trap.'},
+    {t:'Disconnected sample line',why:'A disconnected line gives no waveform at all.'},
+    {t:'Loose sample line',why:'A loose line entrains room air and dilutes the reading. The history here points to moisture.'},
+    {t:'Pulmonary shunt',why:'Shunt is physiological and would not make the waveform shape erratic.'}]},
+{challenge:1,stem:'After you switch the LMA patient to pressure control, the resident looks at the flow tracing. Flow spikes at the very start of each breath and then tapers toward zero before exhalation. He asks whether something is wrong. Which explanation is correct?',
+ o:[{t:'Nothing is wrong. The pressure difference between the set pressure and the lungs is greatest at the start of the breath, so flow is highest early and falls as the lungs fill.',ok:1,why:'Correct. Pressure control produces a decelerating flow pattern. Flow is highest at the beginning of inspiration.'},
+    {t:'The flow should be constant throughout inspiration. The flow sensor is faulty.',why:'Constant flow describes a volume controlled breath. Pressure control flow decelerates.'},
+    {t:'The tapering means PEEP is not set. Pressure modes require PEEP to deliver a full breath.',why:'PEEP is not required for pressure control to work, and it does not cause this pattern.'},
+    {t:'The leak is still present. The early spike is gas escaping around the LMA.',why:'A leak would show up as returned volume lower than delivered volume. This decelerating shape is the normal pattern for the mode.'}]}
+]},
+/* ================= OR 3 ================= */
+{num:'OR 3',name:'Rebreathing',scene:'OR 3 runs MAC cases and long general cases. Today, the baseline will not stay where it belongs.',
+notes:`<ul>
+<li><b>What should Phase I contain?</b> Ask what gas the patient should be inhaling, and what it means when the monitor shows something different at the start of each breath.</li>
+<li><b>Inspired versus expired values.</b> The monitor reports CO2 at two points in every breath. One rises for many reasons, including patient metabolism, ventilation and absorption. The other should stay at a fixed value in a working system. Decide which one is more specific for a circuit problem.</li>
+<li><b>Places CO2 can re enter the inspired gas:</b> the absorbent, the unidirectional valves, and any added dead space between the Y piece and the patient. Think about where else exhaled gas could collect near a patient who is not intubated. When you rule one out, move to the next.</li>
+<li><b>Each valve fails with a signature.</b> Trace the path of exhaled gas when the inspiratory valve sticks open, then again when the expiratory valve sticks open. Ask where on the waveform each failure would show itself.</li>
+<li><b>Two kinds of dead space.</b> Apparatus dead space is in the equipment. Alveolar dead space is in the patient: ventilated lung that is not perfused. The arterial to end tidal CO2 gradient measures only one of these. Know which one, and what that means for the other.</li>
+</ul>`,
+d:[
+{stem:'MAC case. Simple face mask at 1.5 L/min O2, and a fluid resistant drape is tented partly over the face. Which waveform change should you expect?',
+ o:[{t:'An elevated baseline',ok:1,why:'Correct. Low flow under a drape lets exhaled CO2 collect, so the patient rebreathes and the baseline lifts.'},
+    {t:'A shark fin plateau',why:'A shark fin means obstruction to exhalation, not rebreathing.'},
+    {t:'An elevated PaCO2:PETCO2 gradient',why:'The gradient reflects alveolar dead space in the lungs. Drapes do not change it.'},
+    {t:'A curare cleft',why:'A curare cleft is spontaneous diaphragm effort during paralysis. This patient is not paralyzed.'}]},
+{stem:'The provider asks you to confirm rebreathing using only one value on the monitor. Which value do you choose?',wave:()=>capno('elevated'),
+ o:[{t:'FiCO2',ok:1,why:'Correct. Inspired CO2 should be zero. Any FiCO2 above zero means rebreathing.'},
+    {t:'ETCO2',why:'ETCO2 rises for many reasons, including hypoventilation, MH and laparoscopy. It cannot confirm rebreathing on its own.'},
+    {t:'Plateau shape',why:'Plateau shape tells you about expiratory flow, not inspired CO2.'},
+    {t:'FiO2',why:'FiO2 measures oxygen. It tells you nothing about CO2.'}]},
+{stem:'You change the absorbent canister. The new granules are fresh and unused, yet FiCO2 stays above baseline. What do you suspect next?',
+ o:[{t:'An incompetent expiratory valve',ok:1,why:'Correct. With fresh absorbent ruled out, a valve that lets exhaled gas flow backward is the next suspect.'},
+    {t:'Malignant hyperthermia',why:'MH raises ETCO2 through CO2 production. It does not put CO2 into inspired gas when the circuit works properly.'},
+    {t:'Pulmonary shunt',why:'Shunt is a patient problem and does not put CO2 into inspired gas.'},
+    {t:'A loose sample line',why:'A loose line dilutes readings with room air. It lowers values; it does not create inspired CO2.'}]},
+{challenge:1,stem:'To reach a patient positioned prone, the provider adds a long extension with an extra elbow between the Y piece and the ETT. The ventilator settings are unchanged. Which finding would you expect NOT to see?',
+ o:[{t:'A PaCO2:PETCO2 gradient greater than 5 mmHg',ok:1,why:'Correct. The extension is apparatus dead space. It raises the baseline, FiCO2 and ETCO2, but the arterial to end tidal gradient reflects alveolar dead space inside the patient, so it does not widen.'},
+    {t:'An elevated capnography baseline',why:'Gas left in the extension is rebreathed with the next breath, so the baseline rises. You would expect to see this.'},
+    {t:'Increased FiCO2',why:'Rebreathed gas from the extension carries CO2 into the inspired breath. You would expect to see this.'},
+    {t:'Increased ETCO2',why:'Effective alveolar ventilation falls with added dead space, so ETCO2 rises. You would expect to see this.'}]}
+]},
+/* ================= OR 4 ================= */
+{num:'OR 4',name:'The Absorber',scene:'OR 4 sat idle all weekend. The canister looks fine, which is exactly why you should not trust it.',
+notes:`<ul>
+<li><b>Absorption is an acid and base reaction.</b> CO2 has to dissolve in water before the granules can react with it. Identify which side of the reaction is the acid, which is the base, and what the reaction releases besides carbonates.</li>
+<li><b>The indicator reports pH at the granule surface.</b> It does not measure how much capacity remains. Think about what could change the surface pH of granules that are sitting unused.</li>
+<li><b>Water content works in both directions.</b> Too little water and too much water both impair absorption, for different reasons. For each, ask what the CO2 molecule can no longer do.</li>
+<li><b>Dry granules and volatile agents.</b> Desiccated absorbent reacts with volatile agents and produces harmful byproducts and heat. Ask where and when that reaction happens, and what would actually remove the risk.</li>
+<li><b>What leaves a machine dry?</b> Consider which machine conditions remove moisture from a canister when no patient is connected.</li>
+</ul>`,
+d:[
+{stem:'Monday, first case. Someone left the O2 flowmeter running on this machine all weekend. Ten minutes after induction, FiCO2 reads 3 to 4 mmHg and ETCO2 keeps climbing. The canister shows no purple at all. Volumes, chest rise and the circuit check are normal. What is the MOST likely cause?',
+ o:[{t:'Desiccated absorbent that can no longer form carbonic acid',ok:1,why:'Correct. A weekend of dry flow dried out the granules. They cannot absorb CO2, and they may not change color.'},
+    {t:'A breathing circuit leak',why:'Volumes and the circuit check are normal. A leak also does not put CO2 into inspired gas.'},
+    {t:'Decreased pulmonary compliance',why:'Compliance changes affect pressures and volumes, not FiCO2.'},
+    {t:'Patient hyperventilation',why:'Hyperventilation lowers ETCO2.'}]},
+{stem:'The evening technologist says, "Yesterday that canister was purple. This morning it is white again, so it is good to use." What is this phenomenon, and what do you do?',
+ o:[{t:'Peaking regeneration. The color reverted but the capacity did not. Replace the canister.',ok:1,why:'Correct. Rested absorbent can lose its purple color, but it is still exhausted.'},
+    {t:'Rehydration recovery. The granules absorbed room moisture and are usable again.',why:'Exhausted absorbent does not recover its capacity by sitting.'},
+    {t:'Indicator fatigue. The dye failed, but the absorbent is fine.',why:'A color that fades back does not mean the absorbent is fresh.'},
+    {t:'The pumping effect. Leave it in until the next case shows purple.',why:'The pumping effect relates to vaporizers, not absorbents. Waiting for purple again risks rebreathing.'}]},
+{stem:'Late in a long low flow case, you see water pooled in the bottom of the canister. What is the effect on CO2 removal?',
+ o:[{t:'Water coats the granules and blocks absorption.',ok:1,why:'Correct. Absorption needs some water, but pooled water coats the granule surface and CO2 cannot reach it.'},
+    {t:'The granules desiccate.',why:'Desiccation means too little water, the opposite of this problem.'},
+    {t:'Only inspiratory flow is limited; absorption is unchanged.',why:'The main problem is lost absorption, not just flow resistance.'},
+    {t:'The water turns the indicator purple, but absorption is unchanged.',why:'Pooled water impairs absorption. Do not rely on color here.'}]},
+{challenge:1,stem:'Same Monday machine. Before you can swap the canister, a colleague says, "Just flush the circuit at high flow for two minutes before induction. That will clear out any carbon monoxide." How do you respond?',
+ o:[{t:'Flushing will not prevent CO exposure. The CO forms when volatile agent reacts with the dry absorbent during the case, so the desiccated absorbent has to be replaced.',ok:1,why:'Correct. Flushing the breathing system before use will not prevent carbon monoxide exposure. The source is the dry absorbent itself.'},
+    {t:'Flushing will work if you use 100% O2 rather than air.',why:'The gas you flush with does not matter. The dry absorbent will still react with agent once the case begins.'},
+    {t:'Flushing will work, but only if the canister is still white.',why:'Color says nothing reliable about desiccation, and flushing does not fix it.'},
+    {t:'Flushing is unnecessary because CO only forms with nitrous oxide.',why:'CO forms from volatile agents reacting with desiccated absorbent. Nitrous oxide is not the cause.'}]}
+]},
+/* ================= OR 5 ================= */
+{num:'OR 5',name:'The Trend Wall',scene:'OR 5 has the big trend display. The pattern over the last 30 minutes tells the story better than any single number.',
+notes:`<ul>
+<li><b>ETCO2 has three inputs.</b> Production (metabolism and heat), delivery (cardiac output and pulmonary blood flow) and elimination (ventilation). For any trend, ask which input changed.</li>
+<li><b>Speed is a clue.</b> Abrupt changes point to events: something released, something blocked, something disconnected. Gradual changes point to processes: blood loss, cooling, rising metabolism.</li>
+<li><b>Direction is a clue.</b> A sudden surge of CO2 rich blood returning to the lungs pushes ETCO2 one way. A sudden loss of pulmonary blood flow pushes it the other way. Match common surgical events to each.</li>
+<li><b>Treat the cause, not the number.</b> Low pressure from too little volume needs volume. Low pressure from too little vascular tone needs tone. The history, the surgical field and the response to a test dose tell you which is which.</li>
+</ul>`,
+d:[
+{stem:'ORIF of the left tibia. The resident has seen this ETCO2 pattern twice and cannot explain it. What is the MOST likely cause?',wave:()=>trend('tourniquet'),
+ o:[{t:'Deflation of the tourniquet on the left leg',ok:1,why:'Correct. Each short spike is CO2 rich blood washing out of the limb when the tourniquet comes down.'},
+    {t:'Venous air embolism from bubbles in the IV line',why:'Air embolism causes a drop in ETCO2, not a spike.'},
+    {t:'Cement emboli lodging in the lungs',why:'Emboli increase dead space and lower ETCO2.'},
+    {t:'Fluctuations of the forced air warmer',why:'Warmer settings do not produce sudden, short CO2 spikes.'}]},
+{stem:'During removal of a large thigh mass, the infusion pump alarmed "air in line" and someone silenced it. Then you see this trend. What is the MOST likely cause?',wave:()=>trend('vae'),
+ o:[{t:'Venous air embolism from the IV line',ok:1,why:'Correct. Air reaching the pulmonary circulation suddenly increases dead space, so ETCO2 drops.'},
+    {t:'Tourniquet decompression',why:'Tourniquet release causes a spike, not a drop.'},
+    {t:'Hypothermia',why:'Hypothermia lowers ETCO2 slowly over a long period, not suddenly.'},
+    {t:'Malignant hyperthermia',why:'MH raises ETCO2.'}]},
+{stem:'Emergent exploratory laparotomy after a motor vehicle collision. Suction canisters keep filling, HR is 128, and ETCO2 has declined steadily over 20 minutes. What is the likely cause and the best course of action?',wave:()=>trend('hypovolemia'),
+ o:[{t:'Severe hypovolemia. Give crystalloids, colloids and RBCs.',ok:1,why:'Correct. Ongoing blood loss lowers cardiac output, and ETCO2 falls with it. Replace the volume.'},
+    {t:'Hypotension from vasodilation. Give phenylephrine and watch for the BP to rebound.',why:'A vasopressor fits vasodilation. This patient is losing blood, and a pressor cannot replace it.'},
+    {t:'Hyperventilation. Lower the respiratory rate.',why:'Nothing in the history points to a ventilator change, and the bleeding explains the trend.'},
+    {t:'Tube dislodgement. Extubate and reintubate.',why:'A dislodged tube causes a sudden loss of waveform, not a steady decline.'}]},
+{challenge:1,stem:'Next door, an elective hernia repair in a healthy patient. Five minutes after a propofol induction, MAP is 52 mmHg, there is no blood in the field, and ETCO2 has dipped from 38 to 32 mmHg with unchanged ventilator settings. HR is 64. What is the likely cause and the best course of action?',
+ o:[{t:'Hypotension from induction related vasodilation. Give phenylephrine and see whether the BP rebounds.',ok:1,why:'Correct. No blood loss and a recent propofol induction point to lost vascular tone. Lower cardiac output lowers ETCO2, and a vasopressor that restores pressure confirms the cause.'},
+    {t:'Severe hypovolemia. Give colloids, RBCs and crystalloids.',why:'There is no blood loss in a healthy elective patient. Transfusion is not indicated here.'},
+    {t:'Hyperventilation. Lower the respiratory rate.',why:'Ventilator settings did not change. The drop follows the blood pressure.'},
+    {t:'Venous air embolism. Flood the field and position left side down.',why:'Nothing in this case introduces air, and the drop matches the induction drug and the low MAP.'}]}
+]},
+/* ================= OR 6 ================= */
+{num:'OR 6',name:'Mechanics',scene:'OR 6 is the robotic room. Steep positioning, high pressures, and a provider who wants the numbers checked.',
+notes:`<ul>
+<li><b>Compliance</b> describes how easily the lungs and chest wall stretch: the change in volume for each unit change in pressure, in mL/cmH2O.</li>
+<li><b>Static versus dynamic.</b> Static compliance describes the lungs and chest wall with no gas flowing. Dynamic compliance includes the resistance of the airways and tube. Decide which measured pressure reflects each condition, and which baseline pressure has to be removed before you divide.</li>
+<li><b>Inside the circle system</b>, the ventilator delivers volume into a system that includes the patient. Think about what happens to the share of that volume reaching the alveoli when the patient's side becomes stiffer.</li>
+<li><b>The abdomen and the chest share a wall.</b> Consider how insufflation and steep head down positioning change the space available for the lungs, and what that does to pressure, volume and the compliance loop.</li>
+<li><b>The arterial to end tidal gradient.</b> Know the normal range from your readings. A widened gradient suggests alveolar dead space, but ask whether a widened gradient is always a patient problem.</li>
+<li><b>CO2 can come from outside the lungs.</b> During laparoscopy, insufflated CO2 is absorbed into the blood. Decide which values that changes and which it leaves alone.</li>
+</ul>`,
+d:[
+{stem:p=>`The ventilator in OR 6 shows: delivered tidal volume ${p.vt} mL, peak pressure ${p.ppeak} cmH2O, plateau pressure ${p.pplat} cmH2O, PEEP ${p.peep} cmH2O. What is the static compliance?`,
+ o:p=>{const f=v=>(Math.round(v*10)/10).toFixed(1)+' mL/cmH2O';const c=f(p.vt/(p.pplat-p.peep));
+   const cands=[[f(p.vt/p.pplat),'You divided by plateau pressure alone. Remove the baseline pressure first.'],[f(p.vt/(p.ppeak-p.peep)),'Peak pressure includes airway resistance, which makes this dynamic compliance. Static compliance uses the no flow pressure.'],[f(p.vt/p.ppeak),'Peak pressure includes airway resistance, and the baseline pressure was not removed.'],[f(p.vt/(p.pplat+p.peep)),'The baseline pressure is subtracted, not added.'],[f((p.vt-50)/(p.pplat-p.peep)),'Use the delivered tidal volume as shown.']];
+   const out=[{t:c,ok:1,why:`Correct. ${p.vt} ÷ (${p.pplat} − ${p.peep}) = ${c}.`}];const seen=new Set([c]);
+   for(const [t,w] of cands){if(out.length>=4)break;if(!seen.has(t)){seen.add(t);out.push({t,why:w})}}return out}},
+{stem:'Robotic prostatectomy, arms tucked, steep Trendelenburg, abdomen insufflated. Volume control is set at 550 mL, but delivered volume is 450 mL and inspiratory pressure has climbed from 24 to 34 cmH2O. The compliance loop has flattened, ETCO2 is up, FiCO2 is normal, and Phase III has a slight slope. What is the MOST likely cause?',
+ o:[{t:'Decreased pleural space from insufflation and positioning',ok:1,why:'Correct. The abdomen is pushing on the diaphragm. Compliance falls, pressure rises and less volume is delivered.'},
+    {t:'Increased pleural space',why:'Insufflation and head down positioning shrink the pleural space; they do not enlarge it.'},
+    {t:'Total ETT obstruction from a mucus plug',why:'Total obstruction would leave no waveform and no delivered volume.'},
+    {t:'A disconnected expiratory limb',why:'A disconnection drops pressures and the waveform. Pressures here are rising.'}]},
+{stem:p=>`The provider sends an ABG. PaCO2 is ${p.paco2} mmHg, and ETCO2 at the time of the draw was ${p.etco2} mmHg. What is the gradient, and is it normal?`,
+ o:p=>{const g=p.paco2-p.etco2;const nl=g>=2&&g<=5;return [
+   {t:`${g} mmHg, within the normal range of 2 to 5 mmHg`,ok:nl?1:0,why:nl?`Correct. ${p.paco2} − ${p.etco2} = ${g} mmHg, inside the normal 2 to 5 range.`:`${p.paco2} − ${p.etco2} = ${g} mmHg, which is above the normal 2 to 5 range.`},
+   {t:`${g} mmHg, elevated above the normal range of 2 to 5 mmHg`,ok:nl?0:1,why:nl?`${g} mmHg falls inside 2 to 5, so it is normal.`:`Correct. ${p.paco2} − ${p.etco2} = ${g} mmHg, above the normal 2 to 5 range. Think alveolar dead space, but rule out sampling problems.`},
+   {t:`${g} mmHg, within the normal range of 7 to 15 mmHg`,why:'The normal gradient is 2 to 5 mmHg, not 7 to 15.'},
+   {t:'It cannot be judged without the FiCO2.',why:'The gradient only needs PaCO2 and ETCO2. FiCO2 tells you about rebreathing.'}]}},
+{challenge:1,stem:'Laparoscopic cholecystectomy in a healthy patient. Over 25 minutes of insufflation, ETCO2 rises from 35 to 46 mmHg. The waveform shape is normal, FiCO2 is 0, and ventilator settings have not changed. An ABG shows PaCO2 49 mmHg. Which statement is correct?',
+ o:[{t:'CO2 is being absorbed from the peritoneum. The gradient is normal at 3 mmHg, so increase minute ventilation.',ok:1,why:'Correct. Absorbed CO2 raises PaCO2 and ETCO2 together. The waveform and FiCO2 stay normal, and the gradient does not widen. More ventilation removes the extra CO2.'},
+    {t:'The gradient is elevated, which proves new alveolar dead space. Suspect a CO2 embolism.',why:'49 − 46 = 3 mmHg, a normal gradient. Absorption from the peritoneum does not produce an elevated gradient.'},
+    {t:'The patient is rebreathing. Replace the absorbent.',why:'FiCO2 is 0, so there is no rebreathing.'},
+    {t:'This is early MH. Call for the MH cart.',why:'A steady rise that matches insufflation, with no other signs, fits CO2 absorption. Keep MH in mind if other signs appear, but this picture is expected.'}]}
+]},
+/* ================= OR 7 ================= */
+{num:'OR 7',name:'Machine Bay',scene:'Biomed parked several machines in the OR 7 corridor and asked you to sort them out before the first cases start.',
+notes:`<ul>
+<li><b>Market background.</b> GE Healthcare purchased Datex-Ohmeda in 2003. Course readings put GE at about 80% of the US anesthesia machine market and Dräger at about 19%. Know each manufacturer's current and legacy workstation names; tags fall off, but model names do not.</li>
+<li><b>Bellows are classified by what they do during exhalation.</b> Ask why one design makes a disconnection easier to see than the other.</li>
+<li><b>Ventilator drive types.</b> Pneumatically driven bellows, electrically driven pistons and servo controlled valves each deliver a breath differently and fail differently. Know which manufacturer uses which.</li>
+<li><b>Flow sensors and humidity.</b> Fixed and variable orifice sensors both measure flow from a pressure drop across a restriction. Think about what condensed water on that restriction does to the reading, and which ventilator families are known for this problem.</li>
+<li><b>Scavenging protects the ventilator too.</b> Some ventilators monitor pressure in the scavenging interface and respond when it climbs too high. Know the threshold and the response for the GE ventilators in your readings.</li>
+<li><b>Breathing system names</b> differ by manufacturer, for example the GE Advanced Breathing System (ABS) and the Dräger COZI. Know how they compare in volume and response to changes in respiration.</li>
+</ul>`,
+d:[
+{stem:'Biomed labeled one machine "DRÄGER" and the other two "GE." The tags fell off. The machines are an Aisys CS2, an Aespire and an Apollo. Which one is the Dräger?',
+ o:[{t:'Apollo',ok:1,why:'Correct. The Apollo is a Dräger workstation. Aisys and Aespire are GE.'},
+    {t:'Aisys CS2',why:'The Aisys CS2 is a GE workstation.'},
+    {t:'Aespire',why:'The Aespire is part of the GE lineup with the Aestiva, Aisys and Avance.'},
+    {t:'None of them. All three are GE machines.',why:'The Apollo is a Dräger machine.'}]},
+{stem:'A 7900 SmartVent keeps reporting tidal volume errors near the end of long, humid cases. Volumes read normal again after the sensors dry out. What is the underlying problem?',
+ o:[{t:'Moisture building up in the variable orifice flow sensors',ok:1,why:'Correct. Moisture build up is the known weakness of the 7900 and 7100 systems, and the flow sensors are where it shows.'},
+    {t:'Desiccation of the flow sensors',why:'Desiccation is an absorbent problem. Here the sensors are wet, not dry.'},
+    {t:'A faulty constant orifice flow sensor',why:'The 7900 uses variable orifice sensors, not constant orifice sensors.'},
+    {t:'An explosion risk from oxygen in the sensor housing',why:'Explosion is not the known issue with these sensors. Moisture is.'}]},
+{stem:'A student watching the Apollo asks why there are no bellows rising and falling. What do you tell her?',
+ o:[{t:'Dräger ventilators are piston driven.',ok:1,why:'Correct. An electrically driven piston delivers each breath on the Dräger.'},
+    {t:'It uses ascending bellows hidden inside the housing.',why:'Ascending bellows belong to the GE SmartVent.'},
+    {t:'It uses descending bellows.',why:'Dräger ventilators are piston driven, not bellows driven.'},
+    {t:'It is servo driven.',why:'Servo valve ventilation is not how this machine drives breaths. It uses a piston.'}]},
+{challenge:1,stem:'Mid case on a GE machine with a 7100 SmartVent, the scavenger hose has been kinked under a wheel and pressure is building in the scavenging interface. What happens when scavenger pressure reaches 9 cmH2O, and what is your immediate priority?',
+ o:[{t:'The ventilator shuts off. Make sure the patient is being ventilated by hand, then free the kinked hose.',ok:1,why:'Correct. On the 7100, a scavenger pressure of 9 cmH2O shuts the ventilator off. The patient comes first: manual ventilation, then fix the cause.'},
+    {t:'The ventilator performs an inspiratory pause and resumes on its own. Free the hose when convenient.',why:'The 7100 shuts off at that pressure. It does not pause and resume, and a patient without ventilation cannot wait.'},
+    {t:'Nothing happens to the ventilator. Scavenger pressure only affects room pollution.',why:'Scavenger pressure matters to the 7100 ventilator. At 9 cmH2O it shuts off.'},
+    {t:'The ventilator switches to pressure control. Silence the alarm and continue.',why:'There is no automatic mode switch. The ventilator shuts off, so the patient needs manual ventilation now.'}]}
+]},
+/* ================= OR 8 ================= */
+{num:'OR 8',name:'MH Machine Prep',scene:'Tomorrow\'s first case in OR 8 is a patient with a documented MH history. The machine is yours to prepare tonight.',
+notes:`<ul>
+<li><b>Residual agent has many hiding places:</b> the vaporizers, the rubber and plastic parts of the machine, the absorbent and the breathing circuit. A logical prep sequence deals with the sources before it washes out what remains.</li>
+<li><b>Washout is machine specific.</b> Your readings name two factors that determine how long a machine takes to wash out. Know both, and follow the manufacturer's instructions for the model in front of you.</li>
+<li><b>Activated charcoal filters</b> adsorb volatile agent on the inspiratory and expiratory ports. The protocol has an initial high flow flush with a set flow range and duration, followed by a lower maintenance flow for the case. Know all three numbers.</li>
+<li><b>The washout target</b> is expressed in parts per million. Know the number your readings give.</li>
+<li><b>Traditional flushing without charcoal filters</b> has a well known pitfall when the flows are turned down. Know what happens, why it happens, and whether a standard flush time exists for this method.</li>
+<li><b>Handling the filters.</b> Your readings give a rule about whether the inspiratory and expiratory filters must match their limbs, and about handling filters once they are attached. Know it.</li>
+</ul>`,
+d:[
+{stem:'You start preparing the OR 8 machine for tomorrow\'s MH susceptible patient. What do you do FIRST?',
+ o:[{t:'Remove the vaporizers.',ok:1,why:'Correct. Get the source of volatile agent off the machine before anything else.'},
+    {t:'Replace the breathing circuit and absorbent.',why:'That is part of prep, but the vaporizers come off first.'},
+    {t:'Turn the fresh gas flow above 10 L/min.',why:'Flushing comes after the agent source is removed.'},
+    {t:'Turn the machine off.',why:'You need the machine on to flush it.'}]},
+{stem:'Charcoal filters are on both ports, and you have flushed at 12 L/min for 90 seconds. What fresh gas flow do you set and hold for the case?',
+ o:[{t:'3 L/min',ok:1,why:'Correct. After the 90 second flush, reduce to 3 L/min and keep it there.'},
+    {t:'2 L/min',why:'The protocol calls for 3 L/min after the initial flush.'},
+    {t:'6 L/min',why:'That is higher than the protocol calls for. The filters are designed around 3 L/min.'},
+    {t:'Turn fresh gas off until the patient arrives.',why:'Keep flow at 3 L/min so residual agent does not build up.'}]},
+{stem:'A colleague prepped OR 9 last month without charcoal filters, using a long high flow flush. When he turned the flows down, the agent monitor climbed back up. What is this, and what is the target?',
+ o:[{t:'The rebound effect. The target is below 5 ppm.',ok:1,why:'Correct. Agent released from machine components raises the level again when flows drop. That is the biggest pitfall of traditional flushing.'},
+    {t:'The bellows drop effect. The target is 10 ppm.',why:'The bellows are not the issue, and the target is below 5 ppm.'},
+    {t:'Normal behavior once flush time passes 30 minutes. The target is 0 ppm.',why:'There is no standard flush time without charcoal filters, and 0 ppm is not the stated target.'},
+    {t:'A failed flowmeter. The target is 15 ppm.',why:'The flowmeter is working. This is rebound, and the goal is below 5 ppm.'}]},
+{challenge:1,stem:'You arrive at 0700 to check the OR 8 machine you prepped. The filters were attached and flushed per protocol last night, but you notice they are mismatched: the filter marked for the inspiratory limb is on the expiratory port. The patient rolls in at 0715. What is the proper action?',
+ o:[{t:'Leave them where they are. The filters do not have to match the limbs, but once attached they stay in place.',ok:1,why:'Correct. Inspiratory and expiratory filters are not required to match, and once attached you leave them where they are.'},
+    {t:'Swap them to the correct limbs before the patient arrives.',why:'Moving filters that are already attached breaks the rule to leave them in place. Matching is not required.'},
+    {t:'Throw both away, place new filters and start the full flush again.',why:'That is not necessary. The filters do not have to match, and they were placed and flushed correctly.'},
+    {t:'Remove the filters and run a traditional flush instead.',why:'That trades an effective setup for one with no standard flush time and a rebound risk.'}]}
+]},
+/* ================= OR 9 (new) ================= */
+{num:'OR 9',name:'MH Recognition',scene:'OR 9, twenty minutes after a sevoflurane induction for a shoulder repair. The provider calls you in: "Something is off with this patient."',
+notes:`<ul>
+<li><b>The defect.</b> MH susceptibility involves an abnormal calcium release channel in skeletal muscle. Know the name of the receptor. Follow the chain: uncontrolled calcium release leads to sustained contraction, which leads to hypermetabolism.</li>
+<li><b>Sort the signs by mechanism.</b> Increased CO2 production, sympathetic response, muscle rigidity and breakdown, and heat. Decide which mechanisms show up within minutes and which take longer to build.</li>
+<li><b>Two acidoses at once.</b> Rising CO2 causes one kind of acidosis. Anaerobic metabolism and muscle breakdown cause the other. Know which monitor tracks each and what the cart carries for the metabolic side and for the potassium that leaks from damaged muscle.</li>
+<li><b>Temperature monitoring.</b> Some temperature sites reflect core temperature closely, and others lag or read the room. Decide which site you want in a hypermetabolic crisis.</li>
+<li><b>Who gets a trigger free plan.</b> Your readings list conditions that place a patient on the MH protocol. Know them, and be able to tell them apart from conditions that only call for avoiding a single drug.</li>
+</ul>`,
+d:[
+{challenge:1,stem:'ETCO2 has climbed from 38 to 58 mmHg even though the provider doubled minute ventilation. HR is 128 and the jaw is stiff. Esophageal temperature is 37.4 °C. The resident says, "It can\'t be MH. The temperature is normal." What is the best response?',
+ o:[{t:'Temperature rise is a late sign. A rising ETCO2 despite increased ventilation, with tachycardia and rigidity, is an early MH picture. Treat now.',ok:1,why:'Correct. Temperature rise is a late sign of MH. Waiting for fever wastes the window when treatment works best.'},
+    {t:'Agree. Without a fever, MH can be ruled out. Look for a circuit problem.',why:'MH can present well before temperature climbs. Rising ETCO2 despite more ventilation is one of the earliest signs.'},
+    {t:'Check a forehead skin temperature to confirm before acting.',why:'A skin site lags core temperature, and confirmation by temperature is not needed to act on early signs.'},
+    {t:'Tachycardia is a late sign, so the crisis is already advanced.',why:'Tachycardia is an early sign. Temperature rise is the late one.'}]},
+{stem:'Which temperature monitoring device is BEST during an MH crisis?',
+ o:[{t:'Esophageal temperature probe',ok:1,why:'Correct. An esophageal probe reads core temperature, which is what you need to track hypermetabolism and guide cooling.'},
+    {t:'Skin probe in the axilla',why:'Axillary skin temperature lags core temperature and is affected by the room and by cooling measures.'},
+    {t:'Skin probe on the forehead',why:'Forehead skin temperature is a surface reading and is not reliable in a crisis.'},
+    {t:'Crystalline temperature sticker',why:'Stickers give a rough surface estimate, not continuous core temperature.'}]},
+{stem:'The preoperative board lists four patients for tomorrow. Per your course readings, which one is placed on the MH protocol?',
+ o:[{t:'A patient with Duchenne muscular dystrophy',ok:1,why:'Correct. Course readings place patients with Duchenne muscular dystrophy on the MH protocol with a trigger free anesthetic.'},
+    {t:'A patient with rheumatoid arthritis',why:'Rheumatoid arthritis affects airway and positioning planning, but it is not an MH protocol condition.'},
+    {t:'A patient with pseudocholinesterase deficiency',why:'Pseudocholinesterase deficiency prolongs succinylcholine. It calls for avoiding that drug, not a full MH protocol.'},
+    {t:'A patient with a family history of postoperative nausea',why:'Nausea history guides antiemetic planning, not MH precautions.'}]},
+{challenge:1,stem:p=>`A blood gas comes back for the ${p.weight} kg OR 9 patient: pH 7.12, PaCO2 78 mmHg, HCO3 18 mEq/L, K+ 6.4 mEq/L. How do you interpret it, and what does the provider ask you to bring from the MH cart?`,
+ o:p=>[{t:`Combined respiratory and metabolic acidosis with hyperkalemia. Sodium bicarbonate at 1 to 2 mEq/kg, which is ${p.weight} to ${p.weight*2} mEq.`,ok:1,why:`Correct. High CO2 and low bicarbonate together mean both acidoses. Sodium bicarbonate treats the metabolic acidosis and hyperkalemia at 1 to 2 mEq/kg: ${p.weight} kg gives ${p.weight} to ${p.weight*2} mEq.`},
+    {t:`Pure respiratory acidosis. Sodium bicarbonate is not needed; just increase the respiratory rate.`,why:'HCO3 of 18 is low, which means a metabolic component as well. Hyperventilation alone will not correct it.'},
+    {t:`Combined acidosis with hyperkalemia. Sodium bicarbonate at 10 to 20 mEq/kg, which is ${p.weight*10} to ${p.weight*20} mEq.`,why:'The interpretation is right, but the dose is ten times too high. Sodium bicarbonate is 1 to 2 mEq/kg.'},
+    {t:`Metabolic alkalosis. Hold all buffers and give 2% lidocaine.`,why:'A pH of 7.12 is acidemia, not alkalosis.'}]}
+]},
+/* ================= OR 10 ================= */
+{num:'OR 10',name:'MH Crisis',scene:'0710. Overhead page: "MH cart to OR 10." The patient\'s ETCO2 is climbing despite higher minute ventilation, and HR is 140.',
+notes:`<ul>
+<li><b>The first minutes follow a sequence.</b> The Stanford Emergency Manual lists the early steps in order. Know the order, and be able to explain why calling for help and removing triggers come before anything else.</li>
+<li><b>The machine during a crisis.</b> Your readings address whether the anesthesia machine has to be exchanged during an MH event. Know the answer and the reasoning.</li>
+<li><b>Two formulations.</b> The older dantrolene formulation and the newer nanocrystalline formulation differ in vial strength, reconstitution volume and how many vials an MH cart stocks. Only one kind of diluent is acceptable for either. Know all of it.</li>
+<li><b>Dosing is weight based</b> with an initial dose that is repeated until signs resolve. Practice converting a patient weight into a number of vials for each formulation.</li>
+<li><b>Cooling has an endpoint.</b> Cooling that continues too long creates a new problem. Know the temperature at which active cooling stops.</li>
+<li><b>Triggers and non triggers.</b> Sort every anesthetic gas, induction agent and muscle relaxant you know into triggers and safe agents.</li>
+</ul>`,
+d:[
+{stem:p=>`The patient weighs ${p.weight} kg. The provider orders the initial dantrolene bolus at 2.5 mg/kg using the older formulation 20 mg vials. How many vials do you mix, and with what?`,
+ o:p=>{const dose=p.weight*2.5;const n=Math.ceil(dose/20);const wrongN=Math.ceil(p.weight/20);const ry=Math.ceil(dose/250);
+   return [{t:`${n} vials, each mixed with 60 mL sterile water`,ok:1,why:`Correct. ${p.weight} kg × 2.5 mg/kg = ${dose} mg. ${dose} ÷ 20 mg per vial = ${(dose/20).toFixed(2)}, so mix ${n} vials.`},
+     {t:`${n} vials, each mixed with 60 mL bacteriostatic water`,why:'The vial count is right, but dantrolene is mixed only with sterile water.'},
+     {t:`${wrongN===n?n+2:wrongN} vials, each mixed with 60 mL sterile water`,why:`Check your math: ${p.weight} kg × 2.5 mg/kg = ${dose} mg, then divide by 20 mg per vial.`},
+     {t:`${ry} vial${ry>1?'s':''}, each mixed with 5 mL sterile water`,why:'That is the nanocrystalline (Ryanodex) math, 250 mg in 5 mL. You are holding 20 mg vials.'}]}},
+{stem:'Triggers are off. The provider wants to keep the patient anesthetized with an agent that is safe in MH. Which one?',
+ o:[{t:'Nitrous oxide',ok:1,why:'Correct. Nitrous oxide is not an MH trigger.'},
+    {t:'Sevoflurane',why:'All volatile anesthetics are triggers.'},
+    {t:'Desflurane',why:'Desflurane is a volatile anesthetic and a trigger.'},
+    {t:'Succinylcholine',why:'Succinylcholine is the muscle relaxant that can trigger MH.'}]},
+{stem:'Ice packs and cold saline are going in. Esophageal temperature was 39.6 °C and is now falling. At what temperature do you stop active cooling?',
+ o:[{t:'38 °C',ok:1,why:'Correct. Stop active cooling at 38 °C to avoid overshooting into hypothermia.'},
+    {t:'37 °C',why:'Waiting until 37 °C risks overshooting into hypothermia. Stop at 38 °C.'},
+    {t:'36 °C',why:'That is already hypothermic. Stop at 38 °C.'},
+    {t:'39 °C',why:'Too early. Keep cooling until 38 °C.'}]},
+{challenge:1,stem:'Help has been called and the provider has just turned off the vaporizer. A new nurse says, "We need to swap out this whole anesthesia machine right now." Per the Stanford Emergency Manual and your readings, what is the correct next step?',
+ o:[{t:'Increase fresh gas O2 flow above 10 L/min and hyperventilate. Swapping the machine immediately is not necessary.',ok:1,why:'Correct. After the vaporizer is off, the next step is high flow oxygen and hyperventilation to wash out agent and remove CO2. An immediate machine swap is not required.'},
+    {t:'Swap the machine before doing anything else.',why:'An immediate swap delays treatment. Your readings state it is not necessary during the crisis.'},
+    {t:'Increase O2 above 10 L/min and hypoventilate to limit CO2 washout.',why:'The goal is to remove CO2. That means hyperventilation, not hypoventilation.'},
+    {t:'Stop and replace the circuit and absorbent before increasing flows.',why:'Changing the circuit and absorbent is not the next step. High flow O2 and hyperventilation come first.'}]}
+]},
+/* ================= CAPSTONE ================= */
+{num:'OR 11',name:'Full Checkout',capstone:1,scene:'Last room of the shift. A GE Aisys CS2 in OR 11 needs a full checkout, then the room takes a long, complicated case. Everything you have practiced today shows up here.',
+notes:`<ul>
+<li><b>Capstone room.</b> These six decisions combine concepts from every station. Use what you reviewed earlier: sensor technologies, waveform phases, valve failures, trend inputs and workstation features.</li>
+<li><b>Two independent oxygen measurements.</b> A workstation can measure oxygen in more than one place and by more than one method. When two readings disagree, ask which device has a known failure mode and how you would confirm it.</li>
+<li><b>Workstation features.</b> Modern GE workstations add vaporizer, ventilator and flow guidance features that older machines lack. Know the purpose of each feature named in your readings, and which vaporizer system each workstation uses.</li>
+<li><b>Breathing systems differ in how fast they respond.</b> A smaller internal volume changes composition faster when settings or patient demand change.</li>
+<li><b>CO2 during resuscitation.</b> During CPR, ETCO2 reflects how much blood is reaching the lungs.</li>
+</ul>`,
+d:[
+{challenge:1,stem:'During the morning checkout with 100% O2 flowing, the machine\'s inspired O2 monitor reads 17%. The sidestream gas analyzer on the patient monitor reads 98% O2 from the same circuit. Which device is MOST likely at fault, and what is the next step?',
+ o:[{t:'The electrochemical (galvanic) O2 sensor in the inspiratory limb. Calibrate it to room air and replace the cell if it will not read correctly.',ok:1,why:'Correct. The electrochemical cell is the machine\'s primary FiO2 monitor, and it depletes over time. A reading far below the independent analyzer points to the cell.'},
+    {t:'The sidestream analyzer. Its paramagnetic sensor is overreading, so trust the 17%.',why:'With 100% O2 flowing, 98% is the expected value. The 17% reading is the outlier.'},
+    {t:'The pulse oximeter. Recalibrate the SpO2 probe.',why:'SpO2 measures the patient\'s saturation, not the oxygen concentration in the circuit.'},
+    {t:'The capnography bench. Infrared analysis is reading O2 incorrectly.',why:'O2 does not absorb infrared light the way CO2 does. Infrared is not what measures O2 here.'}]},
+{challenge:1,stem:'For the low flow portion of the case, the provider reduces fresh gas to 0.5 L/min. The Aisys CS2 displays ecoFLOW guidance on the screen. What is ecoFLOW designed to help the provider do, and which vaporizer system does this workstation use?',
+ o:[{t:'Maintain the inspired oxygen concentration at low flows. The Aisys CS2 uses Aladin cassette vaporizers.',ok:1,why:'Correct. ecoFLOW helps maintain inspired O2 concentration as flows are reduced. The Aisys CS2 uses the Aladin cassette system.'},
+    {t:'Maintain the expired oxygen concentration. The Aisys CS2 uses TEC 6 vaporizers.',why:'ecoFLOW targets the inspired side. The CS2 uses Aladin cassettes, not TEC 6.'},
+    {t:'Raise oxygen concentration above 45% automatically. The Aisys CS2 uses TEC 7 vaporizers.',why:'ecoFLOW is guidance for maintaining inspired O2, not an automatic boost. The CS2 uses Aladin cassettes.'},
+    {t:'Lower oxygen concentration to 30% to save gas. The Aisys CS2 uses a copper kettle.',why:'ecoFLOW does not set a fixed concentration, and the copper kettle is a historical vaporizer.'}]},
+{challenge:1,stem:'The surgeon expects rapid swings in ventilation demand during this case. The provider asks which setup responds to changes in respiration faster: the Advanced Breathing System (ABS) on this machine, or a 7900 SmartVent setup in the next room. What do you tell her?',
+ o:[{t:'The ABS responds faster than the 7900 SmartVent.',ok:1,why:'Correct. Per course readings, the ABS responds to changes in respiration faster than the 7900 SmartVent.'},
+    {t:'The 7900 SmartVent responds faster because its bellows are ascending.',why:'Bellows direction is about seeing a disconnect, not about response speed. The ABS responds faster.'},
+    {t:'They respond identically because both are GE systems.',why:'Being made by the same manufacturer does not make them identical. The ABS responds faster.'},
+    {t:'The 7900 SmartVent responds faster because it uses a piston.',why:'The 7900 uses bellows, not a piston. The ABS responds faster.'}]},
+{challenge:1,stem:'Four hours in. The room is cold, warming was delayed, and esophageal temperature has drifted to 34.8 °C. ETCO2 has declined slowly from 38 to 31 mmHg. Ventilator settings, blood pressure and HR are unchanged, the waveform shape is normal, and FiCO2 is 0. What is the MOST likely explanation?',
+ o:[{t:'Hypothermia has reduced metabolic CO2 production.',ok:1,why:'Correct. A cooler patient produces less CO2, so ETCO2 drifts down slowly while everything else stays stable.'},
+    {t:'Venous air embolism',why:'An embolism causes a sudden drop, not a slow four hour drift that matches cooling.'},
+    {t:'Severe hypovolemia',why:'Blood pressure and HR are unchanged, and there is no bleeding history.'},
+    {t:'An incompetent expiratory valve',why:'A valve failure raises FiCO2, and FiCO2 is 0 here.'}]},
+{challenge:1,stem:'Late in the case, the patient arrests. During CPR, ETCO2 has hovered at 12 mmHg with good compressions. Suddenly it jumps to 38 mmHg and stays there. What has most likely happened?',
+ o:[{t:'Return of spontaneous circulation',ok:1,why:'Correct. ETCO2 during CPR reflects blood flow to the lungs. A sudden sustained rise means the heart is pumping on its own again.'},
+    {t:'Esophageal intubation',why:'Esophageal placement makes ETCO2 fall toward zero, not rise.'},
+    {t:'Bronchoconstriction from anaphylaxis',why:'Bronchoconstriction changes the waveform shape. It does not cause a sudden sustained jump during CPR.'},
+    {t:'Propofol induced apnea',why:'Apnea removes the waveform. It does not raise ETCO2.'}]},
+{challenge:1,stem:'After the patient stabilizes, FiCO2 begins to rise. The capnogram shows a prolonged, sloping inspiratory downstroke. You just replaced the absorbent, and the expiratory valve tested competent. Which component is now the most likely cause?',
+ o:[{t:'An incompetent inspiratory unidirectional valve',ok:1,why:'Correct. Exhaled gas pushed back into the inspiratory limb is inhaled at the start of the next breath, which stretches out the downstroke and raises FiCO2. Course note: a similar shape appears when suction is applied to a chest tube.'},
+    {t:'Exhausted absorbent',why:'The absorbent was just replaced.'},
+    {t:'An incompetent expiratory valve',why:'The expiratory valve tested competent.'},
+    {t:'A loose sample line',why:'A loose line dilutes the sample with room air. It does not raise FiCO2.'}]}
+]}
+];
+
+/* ---------- State ---------- */
+let CODE=null,P=null,S=null,cur=0;
+const KEY=c=>'machineRounds.v2.'+c;
+function load(c){try{const s=JSON.parse(localStorage.getItem(KEY(c))||'null');if(s&&Array.isArray(s.solved))return s}catch(e){}return{solved:[],first:[],tries:{}}}
+function save(){try{localStorage.setItem(KEY(CODE),JSON.stringify(S))}catch(e){}}
+function hashStr(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function shuffled(arr,seed){const r=rnd(seed);const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+const OFF=[];{let o=0;STATIONS.forEach(st=>{OFF.push(o);o+=st.d.length})}
+const TOTAL=STATIONS.reduce((a,st)=>a+st.d.length,0);
+const slotOf=(si,di)=>OFF[si]+di;
+const locate=slot=>{let si=0;while(si<STATIONS.length-1&&OFF[si+1]<=slot)si++;return [si,slot-OFF[si]]};
+const idx=si=>STATIONS[si].d.map((_,i)=>i);
+const stationDone=si=>idx(si).every(di=>S.solved.includes(slotOf(si,di)));
+const unlocked=si=>si===0||stationDone(si-1);
+const pad=n=>String(n).padStart(2,'0');
+
+function signIn(c){CODE=c;P=ROSTER[c];S=load(c);
+  cur=0;for(let i=0;i<STATIONS.length;i++){if(unlocked(i))cur=i;if(!stationDone(i))break}
+  try{localStorage.setItem('machineRounds.last',c)}catch(e){}
+  document.getElementById('signin').hidden=true;document.getElementById('game').hidden=false;render()}
+
+document.getElementById('signinForm').addEventListener('submit',e=>{e.preventDefault();
+  const c=document.getElementById('codeInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const err=document.getElementById('signinErr');
+  if(!ROSTER[c]){err.textContent='That code is not on the roster. Check the student code printed at the top of your key card.';err.hidden=false;return}
+  err.hidden=true;signIn(c)});
+document.getElementById('switchBtn').addEventListener('click',()=>{document.getElementById('game').hidden=true;document.getElementById('signin').hidden=false;document.getElementById('codeInput').value='';try{localStorage.removeItem('machineRounds.last')}catch(e){}});
+
+function render(){
+  document.getElementById('roCode').textContent=CODE;
+  document.getElementById('roCodes').textContent=S.solved.length+'/'+TOTAL;
+  document.getElementById('roFirst').textContent=S.first.length;
+  const b=document.getElementById('board');b.innerHTML='';
+  STATIONS.forEach((st,si)=>{const btn=document.createElement('button');btn.type='button';btn.className='room'+(si===cur?' active':'');btn.disabled=!unlocked(si);
+    btn.innerHTML=`<span class="num">${st.num}</span><span class="nm">${st.name}</span><span class="pips">${idx(si).map(di=>`<span class="pip${S.solved.includes(slotOf(si,di))?' on':''}"></span>`).join('')}</span>`;
+    btn.setAttribute('aria-label',`${st.num} ${st.name}${btn.disabled?' (locked)':''}`);
+    btn.onclick=()=>{cur=si;render();window.scrollTo({top:0,behavior:'smooth'})};b.appendChild(btn)});
+  const cells=document.getElementById('cells');cells.innerHTML='';
+  for(let k=0;k<TOTAL;k++){const on=S.solved.includes(k);cells.insertAdjacentHTML('beforeend',`<div class="cell${on?'':' empty'}"><span class="s">box ${pad(k+1)}</span><span class="c">${on?pad(P.clues[k]):'··'}</span></div>`)}
+  renderStation();
+}
+function renderStation(){
+  const st=STATIONS[cur];const scr=document.getElementById('screen');
+  const all=S.solved.length===TOTAL;
+  let h=`<div class="room-head"><span class="label">${st.num} · Room ${cur+1} of ${STATIONS.length}${st.capstone?' · Capstone':''}</span><h2>${st.name}</h2><p class="scene">${st.scene}</p></div>`;
+  h+=`<details class="notes"${stationDone(cur)?'':' open'}><summary>Field notes</summary><div class="notes-body">${st.notes}</div></details>`;
+  scr.innerHTML=h;
+  for(let di=0;di<st.d.length;di++){
+    const slot=slotOf(cur,di);
+    if(di>0&&!S.solved.includes(slotOf(cur,di-1)))break;
+    scr.appendChild(decisionEl(st.d[di],slot));
+  }
+  if(stationDone(cur)&&cur<STATIONS.length-1){const nb=document.createElement('button');nb.className='btn next';nb.type='button';nb.textContent=`Go to ${STATIONS[cur+1].num}: ${STATIONS[cur+1].name}`;nb.onclick=()=>{cur++;render();window.scrollTo({top:0,behavior:'smooth'})};scr.appendChild(nb)}
+  if(all){scr.insertAdjacentHTML('beforeend',`<div class="finale"><span class="label">Shift complete</span><h2>All 50 codes collected</h2><p>Look up each code on your key card and write its letter in the matching box. Your 50 letters spell your personal phrase.</p><p>Turn in the phrase, exactly as it reads on your card, to your instructor for 10 points on your exam. Your card is the only one that decodes your codes, so the phrase must come from your own card and your own play.</p><p class="mono">First try decisions: ${S.first.length} of ${TOTAL}</p></div>`)}
+}
+function decisionEl(d,slot){
+  const el=document.createElement('section');el.className='decision';
+  const solved=S.solved.includes(slot);if(solved)el.classList.add('done');
+  const stem=typeof d.stem==='function'?d.stem(P):d.stem;
+  const base=typeof d.o==='function'?d.o(P):d.o;
+  const tries=S.tries[slot]||0;
+  const opts=shuffled(base,hashStr(CODE+':'+slot+':'+tries));
+  let h=`<div class="dhead"><span class="label">Decision ${locate(slot)[1]+1} of ${STATIONS[locate(slot)[0]].d.length}${d.challenge?' <span class="chal">Challenge</span>':''}</span><span class="label mono">Box ${pad(slot+1)}</span></div><p class="stem">${stem}</p>`;
+  if(d.wave)h+=`<div class="wave">${d.wave()}</div>`;
+  h+=`<div class="opts"></div><div class="out"></div>`;
+  el.innerHTML=h;
+  const box=el.querySelector('.opts'),out=el.querySelector('.out');
+  opts.forEach((o,i)=>{const b=document.createElement('button');b.type='button';b.className='opt';b.innerHTML=`<span class="k">${'ABCD'[i]}</span><span>${o.t}</span>`;
+    if(solved){b.disabled=true;if(o.ok)b.classList.add('good')}
+    b.onclick=()=>choose(o,b,el,slot);box.appendChild(b)});
+  if(solved){const okO=base.find(o=>o.ok);out.innerHTML=successHTML(okO,slot)}
+  return el;
+}
+function successHTML(o,slot){return `<div class="fb ok"><span class="t g">Cleared</span><p>${o.why}</p></div><div class="clue"><span class="label">Box ${pad(slot+1)} code</span><span class="big">${pad(P.clues[slot])}</span><span>Write <b class="mono">${pad(P.clues[slot])}</b> in box ${slot+1} of your key card.</span></div>`}
+function choose(o,b,el,slot){
+  const btns=el.querySelectorAll('.opt');btns.forEach(x=>x.disabled=true);
+  const out=el.querySelector('.out');
+  if(o.ok){b.classList.add('good');
+    if(!S.solved.includes(slot)){S.solved.push(slot);if(!(S.tries[slot]>0))S.first.push(slot)}
+    save();out.innerHTML=successHTML(o,slot);
+    document.getElementById('roCodes').textContent=S.solved.length+'/'+TOTAL;
+    setTimeout(render,50);
+  }else{b.classList.add('bad');S.tries[slot]=(S.tries[slot]||0)+1;save();
+    out.innerHTML=`<div class="fb"><span class="t r">Not this one</span><p>${o.why}</p><p>Review the field notes, then try again. The choices will reshuffle.</p></div>`;
+    const again=document.createElement('button');again.type='button';again.className='btn ghost';again.textContent='Try again';
+    again.onclick=()=>{const fresh=decisionEl(STATIONS[locate(slot)[0]].d[locate(slot)[1]],slot);el.replaceWith(fresh);fresh.querySelector('.opt')?.focus()};
+    out.querySelector('.fb').appendChild(again);
+  }
+}
+
+/* hero waveform */
+(function(){const W=760,H=90;let d='M0 78';const bw=W/6;for(let i=0;i<6;i++){const x=i*bw;d+=` L${x+bw*.12} 78 L${x+bw*.2} 30 L${x+bw*.3} 26 L${x+bw*.66} 22 L${x+bw*.72} 78 L${x+bw} 78`}
+document.getElementById('heroWave').innerHTML=`<rect width="${W}" height="${H}" fill="var(--bg)"/><path d="${d}" fill="none" stroke="var(--co2)" stroke-width="2.5" stroke-linejoin="round"/>`})();
+
+/* resume */
+function start(data){const c=(data&&data.code)||(()=>{try{return localStorage.getItem('machineRounds.last')}catch(e){return null}})();if(c&&ROSTER[c])signIn(c)}
+window.claude?.hot?.snapshot?.(()=>({code:CODE}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+
+</body>
+</html>
